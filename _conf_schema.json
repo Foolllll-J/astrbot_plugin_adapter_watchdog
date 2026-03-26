@@ -1,0 +1,40 @@
+{
+  "monitored_adapters": {
+    "description": "监控适配器类型",
+    "hint": "选择需要监控的适配器类型。留空表示不监控。",
+    "type": "list",
+    "options": [
+      "aiocqhttp",
+      "telegram",
+      "discord",
+      "slack",
+      "satori",
+      "lark",
+      "dingtalk",
+      "line",
+      "wecom",
+      "wecom_ai_bot",
+      "qq_official",
+      "qq_official_webhook",
+      "weixin_official_account",
+      "kook",
+      "misskey",
+      "webchat"
+    ],
+    "default": [
+      "aiocqhttp"
+    ]
+  },
+  "check_interval_seconds": {
+    "description": "监控间隔（秒）",
+    "hint": "插件轮询适配器状态的时间间隔，最小为 5 秒。配置为 0 或留空表示不监控。",
+    "type": "int",
+    "default": 300
+  },
+  "notify_targets": {
+    "description": "通知目标会话",
+    "hint": "填写完整 sid，例如：aiocqhttp:GroupMessage:123456789。留空表示不监控。",
+    "type": "list",
+    "default": []
+  }
+}
