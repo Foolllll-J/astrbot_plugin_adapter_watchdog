@@ -1,6 +1,6 @@
 name: astrbot_plugin_adapter_watchdog # 这是你的插件唯一识别名
 display_name: 适配器看门狗 # 用于展示的名字（AstrBot >= v4.5.0）
-desc: 监控平台适配器在线状态，掉线或恢复时向指定会话告警。 # 插件简短描述
+desc: 监控平台适配器在线状态，掉线或恢复时向指定会话发送通知。 # 插件简短描述
 version: v1.0 # 插件版本号。格式：v1.1.1 或 v1.1
 author: Foolllll # 作者
 repo: https://github.com/Foolllll-J/astrbot_plugin_adapter_watchdog # 插件仓库地址

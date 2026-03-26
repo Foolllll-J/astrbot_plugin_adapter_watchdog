@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageEventResult, filter
-from astrbot.api.star import Context, Star, register
+from astrbot.api.star import Context, Star
 
 
 @dataclass(slots=True)
@@ -63,46 +62,21 @@ class AdapterWatchdogPlugin(Star):
             except asyncio.CancelledError:
                 pass
 
-    @filter.command("adapter_watchdog_status")
-    async def adapter_watchdog_status(self, event: AstrMessageEvent):
-        """查看当前看门狗配置与最近状态缓存。"""
-        adapters = ", ".join(self._monitored_adapters) if self._monitored_adapters else "（未配置）"
-        targets = ", ".join(self._notify_targets) if self._notify_targets else "（未配置）"
-        interval_show = (
-            str(self._check_interval_seconds)
-            if self._check_interval_seconds is not None
-            else "（未配置或<=0）"
-        )
-        reasons = "；".join(self._disable_reasons) if self._disable_reasons else "无"
-        enabled_label = "启用" if self._monitor_enabled else "停用"
-
-        if not self._last_online:
-            states = "（暂无缓存）"
-        else:
-            lines = []
-            for platform_id, online in sorted(self._last_online.items()):
-                lines.append(f"- {platform_id}: {'在线' if online else '离线'}")
-            states = "\n".join(lines)
-
-        yield event.plain_result(
-            "\n".join(
-                [
-                    "[adapter_watchdog] 运行状态",
-                    f"monitor_enabled（监控状态）: {enabled_label}",
-                    f"disable_reasons（停用原因）: {reasons}",
-                    f"monitored_adapters（监控适配器）: {adapters}",
-                    f"check_interval_seconds（监控间隔）: {interval_show}",
-                    f"notify_targets（通知会话）: {targets}",
-                    "last_states（最近缓存）:",
-                    states,
-                ]
-            )
-        )
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.command("平台状态", alias={"适配器状态"})
+    async def watchdog_status(self, event: AstrMessageEvent):
+        """立即刷新并查看当前监控状态"""
+        try:
+            await self._monitor_once(send_transition_notify=False)
+        except Exception as exc:
+            yield event.plain_result(f"[适配器看门狗] 刷新失败: {exc}")
+            return
+        yield event.plain_result(self._render_status_text())
 
     async def _monitor_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
-                await self._monitor_once()
+                await self._monitor_once(send_transition_notify=True)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -116,7 +90,7 @@ class AdapterWatchdogPlugin(Star):
             except asyncio.TimeoutError:
                 continue
 
-    async def _monitor_once(self) -> None:
+    async def _monitor_once(self, send_transition_notify: bool = True) -> None:
         platform_insts = list(self.context.platform_manager.platform_insts)
         active_platform_ids: set[str] = set()
 
@@ -142,12 +116,21 @@ class AdapterWatchdogPlugin(Star):
             if previous_online == health.online:
                 continue
 
-            await self._notify_transition(
-                platform_id=platform_id,
-                adapter_name=adapter_name,
-                is_online=health.online,
-                reason=health.reason,
-            )
+            if send_transition_notify:
+                logger.info(
+                    "[adapter_watchdog] 状态变化。platform_id=%s adapter=%s from=%s to=%s reason=%s",
+                    platform_id,
+                    adapter_name,
+                    previous_online,
+                    health.online,
+                    health.reason,
+                )
+                await self._notify_transition(
+                    platform_id=platform_id,
+                    adapter_name=adapter_name,
+                    is_online=health.online,
+                    reason=health.reason,
+                )
 
         # 平台实例被移除或重载时，同步清理缓存。
         for platform_id in list(self._last_online.keys()):
@@ -164,7 +147,7 @@ class AdapterWatchdogPlugin(Star):
         if status_name in {"error", "stopped"}:
             return AdapterHealth(online=False, reason=f"platform.status={status_name}")
 
-        if adapter_name == "aiocqhttp":
+        if adapter_name.lower() == "aiocqhttp":
             return await self._check_aiocqhttp_health(platform, fallback_status=status_name)
 
         if status_name == "running":
@@ -188,12 +171,27 @@ class AdapterWatchdogPlugin(Star):
         api_count = len(api_clients) if isinstance(api_clients, dict) else -1
         event_count = len(event_clients) if isinstance(event_clients, set) else -1
 
-        # Reverse WS 一般会同时存在 API 与 Event 通道。
         if api_count == 0 or event_count == 0:
             return AdapterHealth(
                 online=False,
                 reason=f"reverse_ws_clients api={api_count} event={event_count}",
             )
+
+        try:
+            status_ret = await asyncio.wait_for(
+                client.call_action("get_status"),
+                timeout=self._probe_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            status_ret = None
+        except Exception:
+            status_ret = None
+
+        online_by_status = self._extract_aiocqhttp_online(status_ret)
+        if online_by_status is True:
+            return AdapterHealth(online=True, reason="get_status online=true")
+        if online_by_status is False:
+            return AdapterHealth(online=False, reason="get_status online=false")
 
         try:
             probe_ret = await asyncio.wait_for(
@@ -227,6 +225,29 @@ class AdapterWatchdogPlugin(Star):
             reason="get_login_info returned invalid payload",
         )
 
+    def _extract_aiocqhttp_online(self, payload: Any) -> bool | None:
+        """从 OneBot get_status 返回中提取 online 布尔值。"""
+        if not isinstance(payload, dict):
+            return None
+
+        target: dict[str, Any] = payload
+        data = payload.get("data")
+        if isinstance(data, dict):
+            target = data
+
+        online_raw = target.get("online")
+        if isinstance(online_raw, bool):
+            return online_raw
+        if isinstance(online_raw, (int, float)):
+            return bool(online_raw)
+        if isinstance(online_raw, str):
+            text = online_raw.strip().lower()
+            if text in {"true", "1", "yes", "online"}:
+                return True
+            if text in {"false", "0", "no", "offline"}:
+                return False
+        return None
+
     async def _notify_transition(
         self,
         *,
@@ -238,16 +259,13 @@ class AdapterWatchdogPlugin(Star):
         if not self._notify_targets:
             return
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         status_label = "恢复在线" if is_online else "掉线"
-        title = f"[适配器看门狗] 适配器{status_label}"
+        title = "[适配器恢复通知]" if is_online else "[适配器掉线通知]"
         text = "\n".join(
             [
                 title,
-                f"时间: {now}",
-                f"平台实例 ID: {platform_id}",
-                f"适配器类型: {adapter_name}",
-                f"判定依据: {reason}",
+                f"{platform_id} {status_label}",
+                f"适配器类型：{adapter_name}",
             ]
         )
 
@@ -306,3 +324,33 @@ class AdapterWatchdogPlugin(Star):
         if self._check_interval_seconds is None:
             reasons.append("监控间隔为空或<=0")
         return reasons
+
+    def _render_status_text(self) -> str:
+        adapters = ", ".join(self._monitored_adapters) if self._monitored_adapters else "（未配置）"
+        targets = ", ".join(self._notify_targets) if self._notify_targets else "（未配置）"
+        interval_show = (
+            str(self._check_interval_seconds)
+            if self._check_interval_seconds is not None
+            else "（未配置或<=0）"
+        )
+        enabled_label = "启用" if self._monitor_enabled else "停用"
+
+        if not self._last_online:
+            states = "（暂无缓存）"
+        else:
+            lines = []
+            for platform_id, online in sorted(self._last_online.items()):
+                lines.append(f"- {platform_id}: {'在线' if online else '离线'}")
+            states = "\n".join(lines)
+
+        return "\n".join(
+            [
+                "[适配器看门狗]",
+                f"监控状态: {enabled_label}",
+                f"监控适配器: {adapters}",
+                f"监控间隔: {interval_show}",
+                f"通知会话: {targets}",
+                "当前状态:",
+                states,
+            ]
+        )
