@@ -30,6 +30,11 @@ class AdapterWatchdogPlugin(Star):
         self._notify_targets = self._read_list("notify_targets")
         self._check_interval_seconds = self._read_check_interval_seconds()
         self._probe_timeout_seconds = 6
+        self._offline_recheck_delay_seconds = 10
+        self._enable_offline_recheck = (
+            self._check_interval_seconds is not None
+            and self._check_interval_seconds > 30
+        )
         self._disable_reasons = self._build_disable_reasons()
         self._monitor_enabled = len(self._disable_reasons) == 0
 
@@ -117,19 +122,39 @@ class AdapterWatchdogPlugin(Star):
                 continue
 
             if send_transition_notify:
+                final_health = health
+                if previous_online and not health.online and self._enable_offline_recheck:
+                    recheck_health = await self._recheck_offline_health(
+                        platform=platform,
+                        platform_id=platform_id,
+                        adapter_name=adapter_name,
+                        first_reason=health.reason,
+                    )
+                    if recheck_health is None:
+                        continue
+                    final_health = recheck_health
+                    self._last_online[platform_id] = final_health.online
+                    if previous_online == final_health.online:
+                        logger.info(
+                            "[adapter_watchdog] 掉线复核后恢复，无需通知。platform_id=%s adapter=%s reason=%s",
+                            platform_id,
+                            adapter_name,
+                            final_health.reason,
+                        )
+                        continue
                 logger.info(
                     "[adapter_watchdog] 状态变化。platform_id=%s adapter=%s from=%s to=%s reason=%s",
                     platform_id,
                     adapter_name,
                     previous_online,
-                    health.online,
-                    health.reason,
+                    final_health.online,
+                    final_health.reason,
                 )
                 await self._notify_transition(
                     platform_id=platform_id,
                     adapter_name=adapter_name,
-                    is_online=health.online,
-                    reason=health.reason,
+                    is_online=final_health.online,
+                    reason=final_health.reason,
                 )
 
         # 平台实例被移除或重载时，同步清理缓存。
@@ -247,6 +272,52 @@ class AdapterWatchdogPlugin(Star):
             if text in {"false", "0", "no", "offline"}:
                 return False
         return None
+
+    async def _recheck_offline_health(
+        self,
+        *,
+        platform: Any,
+        platform_id: str,
+        adapter_name: str,
+        first_reason: str,
+    ) -> AdapterHealth | None:
+        logger.info(
+            "[adapter_watchdog] 检测到掉线，%ss后复核。platform_id=%s adapter=%s reason=%s",
+            self._offline_recheck_delay_seconds,
+            platform_id,
+            adapter_name,
+            first_reason,
+        )
+        try:
+            await asyncio.wait_for(
+                self._stop_event.wait(),
+                timeout=self._offline_recheck_delay_seconds,
+            )
+            logger.info(
+                "[adapter_watchdog] 监控停止，取消掉线复核。platform_id=%s adapter=%s",
+                platform_id,
+                adapter_name,
+            )
+            return None
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            recheck_health = await self._check_platform_health(platform)
+        except Exception as exc:
+            recheck_health = AdapterHealth(
+                online=False,
+                reason=f"recheck failed: {type(exc).__name__}: {exc}",
+            )
+
+        logger.info(
+            "[adapter_watchdog] 掉线复核结果。platform_id=%s adapter=%s online=%s reason=%s",
+            platform_id,
+            adapter_name,
+            recheck_health.online,
+            recheck_health.reason,
+        )
+        return recheck_health
 
     async def _notify_transition(
         self,
