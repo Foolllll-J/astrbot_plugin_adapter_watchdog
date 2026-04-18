@@ -28,6 +28,8 @@ class AdapterWatchdogPlugin(Star):
             item.lower() for item in self._read_list("monitored_adapters")
         ]
         self._notify_targets = self._read_list("notify_targets")
+        self._offline_reply = "" if (offline_reply := self.config.get("offline_reply")) is None else str(offline_reply).strip()
+        self._online_reply = "" if (online_reply := self.config.get("online_reply")) is None else str(online_reply).strip()
         self._check_interval_seconds = self._read_check_interval_seconds()
         self._probe_timeout_seconds = 6
         self._offline_recheck_delay_seconds = 10
@@ -332,13 +334,15 @@ class AdapterWatchdogPlugin(Star):
 
         status_label = "恢复在线" if is_online else "掉线"
         title = "[适配器恢复通知]" if is_online else "[适配器掉线通知]"
-        text = "\n".join(
-            [
-                title,
-                f"{platform_id} {status_label}",
-                f"适配器类型：{adapter_name}",
-            ]
-        )
+        text = self._online_reply if is_online else self._offline_reply
+        if not text:
+            text = "\n".join(
+                [
+                    title,
+                    f"{platform_id} {status_label}",
+                    f"适配器类型：{adapter_name}",
+                ]
+            )
 
         for session in self._notify_targets:
             try:

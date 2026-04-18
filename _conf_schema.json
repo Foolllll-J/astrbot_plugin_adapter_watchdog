@@ -36,5 +36,17 @@
     "hint": "填写完整 sid，例如：aiocqhttp:GroupMessage:123456789。留空表示不监控。",
     "type": "list",
     "default": []
+  },
+  "offline_reply": {
+    "description": "掉线时通知文案",
+    "hint": "当适配器掉线通知时使用的自定义文案。留空则使用默认文案。",
+    "type": "string",
+    "default": ""
+  },
+  "online_reply": {
+    "description": "恢复在线时通知文案",
+    "hint": "当适配器恢复在线时使用的自定义文案。留空则使用默认文案。",
+    "type": "string",
+    "default": ""
   }
 }
