@@ -37,6 +37,12 @@
     "type": "list",
     "default": []
   },
+  "bark_url": {
+    "description": "Bark 推送地址",
+    "hint": "从 Bark App 复制的完整推送地址（含 Key），例如 https://api.day.app/xxxxxxx 或自建服务。留空表示不启用 Bark 通知。",
+    "type": "string",
+    "default": ""
+  },
   "offline_reply": {
     "description": "掉线时通知文案",
     "hint": "当适配器掉线通知时使用的自定义文案。留空则使用默认文案。",
