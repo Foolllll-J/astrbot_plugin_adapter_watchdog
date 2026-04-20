@@ -127,7 +127,8 @@ class AdapterWatchdogPlugin(Star):
                 continue
 
             active_platform_ids.add(platform_id)
-            health = await self._check_platform_health(platform)
+            has_cached_user_id = bool(self._last_user_ids.get(platform_id))
+            health = await self._check_platform_health(platform, require_login_info=not has_cached_user_id)
             previous_online = self._last_online.get(platform_id)
             self._last_online[platform_id] = health.online
 
@@ -169,8 +170,10 @@ class AdapterWatchdogPlugin(Star):
                             platform_id=platform_id,
                             adapter_name=adapter_name,
                         )
+
                 if previous_online == final_health.online:
                     continue
+
                 logger.info(
                     "[adapter_watchdog] 状态变化。platform_id=%s adapter=%s from=%s to=%s reason=%s",
                     platform_id,
@@ -194,7 +197,7 @@ class AdapterWatchdogPlugin(Star):
                 self._last_user_ids.pop(platform_id, None)
                 self._last_nicknames.pop(platform_id, None)
 
-    async def _check_platform_health(self, platform: Any) -> AdapterHealth:
+    async def _check_platform_health(self, platform: Any, require_login_info: bool = False) -> AdapterHealth:
         meta = platform.meta()
         adapter_name = str(meta.name or "").strip()
 
@@ -208,6 +211,7 @@ class AdapterWatchdogPlugin(Star):
             return await self._check_aiocqhttp_health(
                 platform=platform,
                 fallback_status=status_name,
+                require_login_info=require_login_info,
             )
 
         if status_name == "running":
@@ -222,6 +226,7 @@ class AdapterWatchdogPlugin(Star):
         self,
         platform: Any,
         fallback_status: str,
+        require_login_info: bool = False,
     ) -> AdapterHealth:
         client = platform.get_client()
 
@@ -244,14 +249,15 @@ class AdapterWatchdogPlugin(Star):
             )
         except asyncio.TimeoutError:
             status_ret = None
-        except Exception:
+        except Exception as exc:
             status_ret = None
 
         online_by_status = self._extract_aiocqhttp_online(status_ret)
-        if online_by_status is True:
-            return AdapterHealth(online=True, reason="get_status online=true")
         if online_by_status is False:
             return AdapterHealth(online=False, reason="get_status online=false")
+
+        if online_by_status is True and not require_login_info:
+            return AdapterHealth(online=True, reason="get_status online=true")
 
         try:
             probe_ret = await asyncio.wait_for(
@@ -287,7 +293,6 @@ class AdapterWatchdogPlugin(Star):
             online=False,
             reason="get_login_info returned invalid payload",
         )
-
 
     def _extract_aiocqhttp_online(self, payload: Any) -> bool | None:
         """从 OneBot get_status 返回中提取 online 布尔值。"""
@@ -381,7 +386,7 @@ class AdapterWatchdogPlugin(Star):
             pass
 
         try:
-            recheck_health = await self._check_platform_health(platform)
+            recheck_health = await self._check_platform_health(platform, require_login_info=not bool(self._last_user_ids.get(platform_id)))
         except Exception as exc:
             recheck_health = AdapterHealth(
                 online=False,
