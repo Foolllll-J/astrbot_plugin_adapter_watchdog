@@ -40,6 +40,7 @@ class AdapterWatchdogPlugin(Star):
         notifier_cfg = self.config.get("notifier", {}) or {}
         self._notify_targets = self._read_list("notify_targets", source=notifier_cfg)
         self._bark_url = str(notifier_cfg.get("bark_url", "") or "").strip()
+        self._serverchan_key = str(notifier_cfg.get("serverchan_key", "") or "").strip()
         email_cfg = notifier_cfg.get("email", {}) or {}
         self._smtp_config = self._read_smtp_config(email_cfg)
         self._offline_reply = "" if (offline_reply := self.config.get("offline_reply")) is None else str(offline_reply).strip()
@@ -360,12 +361,14 @@ class AdapterWatchdogPlugin(Star):
             self.context,
             notify_targets=self._notify_targets,
             bark_url=self._bark_url,
+            serverchan_key=self._serverchan_key,
             smtp_config=self._smtp_config,
             user_id=user_id,
             offline_reply=self._offline_reply,
             online_reply=self._online_reply,
             platform_label=platform_label,
             adapter_name=platform_name,
+            platform_id=platform_id,
             is_online=is_online,
             logger=logger,
         )
@@ -432,10 +435,13 @@ class AdapterWatchdogPlugin(Star):
         if not self._monitored_adapters:
             reasons.append("未选择监控适配器")
         has_any_notifier = bool(
-            self._notify_targets or self._bark_url or self._smtp_config
+            self._notify_targets
+            or self._bark_url
+            or self._serverchan_key
+            or self._smtp_config
         )
         if not has_any_notifier:
-            reasons.append("未配置任何通知渠道（会话/Bark/邮件）")
+            reasons.append("未配置任何通知渠道（会话/Bark/Server酱/邮件）")
         if self._check_interval_seconds is None:
             reasons.append("监控间隔为空或<=0")
         return reasons
@@ -456,6 +462,7 @@ class AdapterWatchdogPlugin(Star):
         else:
             channels.append("会话(未配置)")
         channels.append("Bark(已启用)" if self._bark_url else "Bark(未配置)")
+        channels.append("Server酱(已启用)" if self._serverchan_key else "Server酱(未配置)")
         channels.append("邮件(已启用)" if self._smtp_config else "邮件(未配置)")
         channels_str = " / ".join(channels)
 

@@ -54,6 +54,12 @@
         "type": "string",
         "default": ""
       },
+      "serverchan_key": {
+        "description": "Server酱 SendKey",
+        "hint": "从 https://sct.ftqq.com 获取 SendKey。留空表示不启用。",
+        "type": "string",
+        "default": ""
+      },
       "email": {
         "description": "邮件通知配置",
         "hint": "配置 SMTP 邮件发送。留空或 SMTP 服务器地址 为空则不启用。",

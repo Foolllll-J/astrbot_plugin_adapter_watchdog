@@ -7,6 +7,7 @@
   - 从 `monitored_adapters` 移除纯 webhook 平台。
 - 重构：将通知逻辑抽离为 `notifiers/` 模块。
   - 新增 SMTP 邮件通知渠道。
+  - 新增 Server酱 通知渠道。
   - 通知配置统一纳入 `notifier` 对象。
 - 修复：Bark 通知图标仅在 aiocqhttp 平台时追加 QQ 头像。
 
