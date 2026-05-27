@@ -11,15 +11,8 @@
       "satori",
       "lark",
       "dingtalk",
-      "line",
-      "wecom",
-      "wecom_ai_bot",
-      "qq_official",
-      "qq_official_webhook",
-      "weixin_official_account",
       "kook",
-      "misskey",
-      "webchat"
+      "misskey"
     ],
     "default": [
       "aiocqhttp"
@@ -30,18 +23,6 @@
     "hint": "插件轮询适配器状态的时间间隔，最小为 5 秒。配置为 0 或留空表示不监控。",
     "type": "int",
     "default": 300
-  },
-  "notify_targets": {
-    "description": "通知目标会话",
-    "hint": "填写完整 sid，例如：aiocqhttp:GroupMessage:123456789。留空表示不监控。",
-    "type": "list",
-    "default": []
-  },
-  "bark_url": {
-    "description": "Bark 推送地址",
-    "hint": "从 Bark App 复制的完整推送地址（含 Key），例如 https://api.day.app/xxxxxxx 或自建服务。留空表示不启用 Bark 通知。",
-    "type": "string",
-    "default": ""
   },
   "offline_reply": {
     "description": "掉线时通知文案",
@@ -54,5 +35,75 @@
     "hint": "当适配器恢复在线时使用的自定义文案。留空则使用默认文案。",
     "type": "string",
     "default": ""
+  },
+  "notifier": {
+    "description": "通知渠道配置",
+    "hint": "至少启用一个通知渠道才能发送通知。",
+    "type": "object",
+    "default": {},
+    "items": {
+      "notify_targets": {
+        "description": "通知目标会话",
+        "hint": "填写完整 sid，例如：aiocqhttp:GroupMessage:123456789。留空表示不启用。",
+        "type": "list",
+        "default": []
+      },
+      "bark_url": {
+        "description": "Bark 推送地址",
+        "hint": "从 Bark App 复制的完整推送地址（含 Key），例如 https://api.day.app/xxxxxxx 或自建服务。留空表示不启用 Bark 通知。",
+        "type": "string",
+        "default": ""
+      },
+      "email": {
+        "description": "邮件通知配置",
+        "hint": "配置 SMTP 邮件发送。留空或 SMTP 服务器地址 为空则不启用。",
+        "type": "object",
+        "default": {},
+        "items": {
+          "smtp_host": {
+            "description": "SMTP 服务器地址",
+            "hint": "例如 smtp.gmail.com。留空表示不启用邮件通知。",
+            "type": "string",
+            "default": ""
+          },
+          "smtp_port": {
+            "description": "SMTP 服务器端口",
+            "hint": "SSL/TLS 模式默认 465，STARTTLS 模式默认 587。",
+            "type": "int",
+            "default": 465
+          },
+          "smtp_use_tls": {
+            "description": "SMTP 使用 SSL/TLS",
+            "hint": "true=SSL/TLS 端口 465 / false=STARTTLS 端口 587。",
+            "type": "bool",
+            "default": true
+          },
+          "smtp_user": {
+            "description": "SMTP 登录用户名",
+            "hint": "通常为邮箱地址。",
+            "type": "string",
+            "default": ""
+          },
+          "smtp_password": {
+            "description": "SMTP 登录密码",
+            "hint": "部分服务商需使用授权码而非登录密码。",
+            "type": "string",
+            "default": ""
+          },
+          "email_from": {
+            "description": "发件人地址",
+            "hint": "留空则使用 SMTP 用户名。",
+            "type": "string",
+            "default": ""
+          },
+          "email_to": {
+            "description": "收件人地址列表",
+            "hint": "填写一个或多个邮箱地址。",
+            "type": "list",
+            "default": []
+          }
+        }
+      }
+    }
   }
 }
