@@ -7,6 +7,8 @@ from .session import send_session_notifications
 from .bark import send_bark_notification
 from .email import send_email_notification, SmtpConfig
 from .serverchan import send_serverchan_notification
+from .webhook import send_webhook_notification
+from .qq_official import send_qq_official_notification
 
 
 async def notify_transition(
@@ -16,6 +18,11 @@ async def notify_transition(
     bark_url: str,
     serverchan_key: str,
     smtp_config: SmtpConfig | None,
+    webhook_urls: list[str] | None = None,
+    qq_official_appid: str = "",
+    qq_official_appsecret: str = "",
+    qq_official_user_openids: list[str] | None = None,
+    qq_official_group_openids: list[str] | None = None,
     user_id: str | None,
     offline_reply: str,
     online_reply: str,
@@ -100,6 +107,43 @@ async def notify_transition(
                 adapter_name,
             )
 
+    status_label = "恢复在线" if is_online else "掉线"
+    webhook_status = status_label
+
+    if webhook_urls:
+        wh_success = await send_webhook_notification(
+            webhook_urls=webhook_urls,
+            title=f"[适配器{webhook_status}] {platform_label}",
+            body=message_text,
+            status="online" if is_online else "offline",
+            platform=platform_label,
+            adapter_name=adapter_name,
+            logger=logger,
+        )
+        if not wh_success:
+            logger.error(
+                "[adapter_watchdog] Webhook 通知发送失败。adapter=%s",
+                adapter_name,
+            )
+
+    if qq_official_appid and qq_official_appsecret and (
+        qq_official_user_openids or qq_official_group_openids
+    ):
+        qq_success = await send_qq_official_notification(
+            appid=qq_official_appid,
+            appsecret=qq_official_appsecret,
+            user_openids=qq_official_user_openids or [],
+            group_openids=qq_official_group_openids or [],
+            title=f"[适配器{webhook_status}] {platform_label}",
+            body=message_text,
+            logger=logger,
+        )
+        if not qq_success:
+            logger.error(
+                "[adapter_watchdog] QQ官方机器人 通知发送失败。adapter=%s",
+                adapter_name,
+            )
+
 
 __all__ = [
     "notify_transition",
@@ -107,4 +151,6 @@ __all__ = [
     "send_session_notifications",
     "send_bark_notification",
     "send_email_notification",
+    "send_webhook_notification",
+    "send_qq_official_notification",
 ]

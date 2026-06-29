@@ -43,6 +43,12 @@ class AdapterWatchdogPlugin(Star):
         self._serverchan_key = str(notifier_cfg.get("serverchan_key", "") or "").strip()
         email_cfg = notifier_cfg.get("email", {}) or {}
         self._smtp_config = self._read_smtp_config(email_cfg)
+        self._webhook_urls = self._read_list("webhooks", source=notifier_cfg)
+        qq_cfg = notifier_cfg.get("qq_official", {}) or {}
+        self._qq_official_appid = str(qq_cfg.get("appid", "") or "").strip()
+        self._qq_official_appsecret = str(qq_cfg.get("appsecret", "") or "")
+        self._qq_official_user_openids = self._read_list("user_openids", source=qq_cfg)
+        self._qq_official_group_openids = self._read_list("group_openids", source=qq_cfg)
         self._offline_reply = "" if (offline_reply := self.config.get("offline_reply")) is None else str(offline_reply).strip()
         self._online_reply = "" if (online_reply := self.config.get("online_reply")) is None else str(online_reply).strip()
         self._check_interval_seconds = self._read_check_interval_seconds()
@@ -363,6 +369,11 @@ class AdapterWatchdogPlugin(Star):
             bark_url=self._bark_url,
             serverchan_key=self._serverchan_key,
             smtp_config=self._smtp_config,
+            webhook_urls=self._webhook_urls,
+            qq_official_appid=self._qq_official_appid,
+            qq_official_appsecret=self._qq_official_appsecret,
+            qq_official_user_openids=self._qq_official_user_openids,
+            qq_official_group_openids=self._qq_official_group_openids,
             user_id=user_id,
             offline_reply=self._offline_reply,
             online_reply=self._online_reply,
@@ -439,9 +450,18 @@ class AdapterWatchdogPlugin(Star):
             or self._bark_url
             or self._serverchan_key
             or self._smtp_config
+            or self._webhook_urls
+            or (
+                self._qq_official_appid
+                and self._qq_official_appsecret
+                and (
+                    self._qq_official_user_openids
+                    or self._qq_official_group_openids
+                )
+            )
         )
         if not has_any_notifier:
-            reasons.append("未配置任何通知渠道（会话/Bark/Server酱/邮件）")
+            reasons.append("未配置任何通知渠道（会话/Bark/Server酱/邮件/Webhook/QQ官方机器人）")
         if self._check_interval_seconds is None:
             reasons.append("监控间隔为空或<=0")
         return reasons
@@ -464,6 +484,13 @@ class AdapterWatchdogPlugin(Star):
         channels.append("Bark(已启用)" if self._bark_url else "Bark(未配置)")
         channels.append("Server酱(已启用)" if self._serverchan_key else "Server酱(未配置)")
         channels.append("邮件(已启用)" if self._smtp_config else "邮件(未配置)")
+        channels.append(f"Webhook(已启用:{len(self._webhook_urls)}条)" if self._webhook_urls else "Webhook(未配置)")
+        has_qq = bool(
+            self._qq_official_appid
+            and self._qq_official_appsecret
+            and (self._qq_official_user_openids or self._qq_official_group_openids)
+        )
+        channels.append("QQ官方机器人(已启用)" if has_qq else "QQ官方机器人(未配置)")
         channels_str = " / ".join(channels)
 
         if not self._last_online:

@@ -60,6 +60,12 @@
         "type": "string",
         "default": ""
       },
+      "webhooks": {
+        "description": "通用 Webhook 通知",
+        "hint": "填入一个或多个 Webhook 地址。留空表示不启用。",
+        "type": "list",
+        "default": []
+      },
       "email": {
         "description": "邮件通知配置",
         "hint": "配置 SMTP 邮件发送。留空或 SMTP 服务器地址 为空则不启用。",
@@ -105,6 +111,38 @@
           "email_to": {
             "description": "收件人地址列表",
             "hint": "填写一个或多个邮箱地址。",
+            "type": "list",
+            "default": []
+          }
+        }
+      },
+      "qq_official": {
+        "description": "QQ 官方机器人通知",
+        "hint": "配置 QQ 官方机器人发送。留空或 AppID 为空则不启用。",
+        "type": "object",
+        "default": {},
+        "items": {
+          "appid": {
+            "description": "AppID",
+            "hint": "从 QQ 开放平台获取。",
+            "type": "string",
+            "default": ""
+          },
+          "appsecret": {
+            "description": "AppSecret",
+            "hint": "从 QQ 开放平台获取。",
+            "type": "string",
+            "default": ""
+          },
+          "user_openids": {
+            "description": "接收通知的用户 OpenID",
+            "hint": "填入接收通知的用户 openid。留空不推送用户消息。",
+            "type": "list",
+            "default": []
+          },
+          "group_openids": {
+            "description": "接收通知的群 OpenID",
+            "hint": "填入接收通知的群 openid。留空不推送群消息。",
             "type": "list",
             "default": []
           }
